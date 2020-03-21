@@ -20,10 +20,13 @@ import retrofit2.http.GET
 import retrofit2.http.Query
 import java.net.URLDecoder
 import java.net.URLEncoder
+import java.security.AlgorithmConstraints
 import java.security.SecureRandom
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 import kotlin.math.abs
+import kotlin.math.absoluteValue
+import kotlin.random.Random
 
 class MainActivity : AppCompatActivity() {
 
@@ -37,8 +40,8 @@ class MainActivity : AppCompatActivity() {
 //                    Log.d(TAG, "taskexception:", task.exception)
 //            }
 
-        var oAuthProviderBuilder = OAuthProvider.newBuilder("twitter.com")
-        var auth = FirebaseAuth.getInstance()
+//        val oAuthProviderBuilder = OAuthProvider.newBuilder("twitter.com")
+//        val auth = FirebaseAuth.getInstance()
 //        auth.pendingAuthResult?.apply {
 //            addOnSuccessListener {
 //                Log.d(TAG, "pending success:" + it)
@@ -47,52 +50,92 @@ class MainActivity : AppCompatActivity() {
 //                Log.d(TAG, "pending failure:" + it)
 //            }
 //        } ?:
-        auth.startActivityForSignInWithProvider(this, oAuthProviderBuilder.build())
-            .addOnSuccessListener {
-                Log.d(TAG, "success:" + it)
-                val credential = it.credential as OAuthCredential;
-                val username = it.additionalUserInfo?.username
-                val accessToken = credential.accessToken
-                val secret = credential.secret
-                Log.d(TAG, "username:$username")
-                Log.d(TAG, "profile.id:" + it.additionalUserInfo?.profile?.get("id"))
-                Log.d(TAG, "accessToken:$accessToken")
-                Log.d(TAG, "secret:$secret")
-                Log.d(TAG, "user.uid:" + it.user?.uid)
-                Log.d(TAG, "consumer_key:${OAuthConst.oauth_consumer_key}")
-                Log.d(TAG, "consumerSecret:${OAuthConst.consumerSecret}")
-                val userRequest = UserRequest(username ?: "", accessToken, secret ?: "")
-                getListFriends(userRequest)
-            }
-            .addOnFailureListener {
-                Log.d(TAG, "failure:" + it)
-            }
+//        auth.startActivityForSignInWithProvider(this, oAuthProviderBuilder.build())
+//            .addOnSuccessListener {
+//                Log.d(TAG, "success:" + it)
+//                val credential = it.credential as OAuthCredential;
+//                val username = it.additionalUserInfo?.username
+//                val accessToken = credential.accessToken
+//                val secret = credential.secret
+//                Log.d(TAG, "username:$username")
+//                Log.d(TAG, "profile.id:" + it.additionalUserInfo?.profile?.get("id"))
+//                Log.d(TAG, "accessToken:$accessToken")
+//                Log.d(TAG, "secret:$secret")
+//                Log.d(TAG, "user.uid:" + it.user?.uid)
+//                Log.d(TAG, "consumer_key:${OAuthConst.oauth_consumer_key}")
+//                Log.d(TAG, "consumerSecret:${OAuthConst.consumerSecret}")
+//                val userRequest = UserRequest(username ?: "", accessToken, secret ?: "")
+//                getListFriends(userRequest)
+//            }
+//            .addOnFailureListener {
+//                Log.d(TAG, "failure:" + it)
+//            }
+        val userRequest = UserRequest(
+            TwitterAccessToken.username,
+            TwitterAccessToken.accessToken,
+            TwitterAccessToken.secret
+        )
+        getListFriends(userRequest)
+        getListFollowers(userRequest)
     }
 
     private fun getListFriends(userRequest: UserRequest) {
-        userRequest.callListFriends().enqueue(object : Callback<List<Long>> {
-            override fun onFailure(call: Call<List<Long>>, t: Throwable) {
+        userRequest.callListFriends().enqueue(object : Callback<TwitterUsersIds> {
+            override fun onFailure(call: Call<TwitterUsersIds>, t: Throwable) {
                 Log.d(TAG, t?.message)
             }
 
-            override fun onResponse(call: Call<List<Long>>, response: Response<List<Long>>) {
-                Log.d(TAG, "response.code:${response.code()}")
-                Log.d(TAG, "response.headers:${response.headers()}")
-                response.body()?.forEach { Log.d(TAG, "id:$it") }
+            override fun onResponse(call: Call<TwitterUsersIds>, response: Response<TwitterUsersIds>) {
+                Log.d(TAG, "getListFriends response.code:${response.code()}")
+                //Log.d(TAG, "response.headers:${response.headers()}")
+                val twitterUsersIds = response.body()
+                twitterUsersIds?.let {
+                    twitterUsersIds.ids?.forEach { Log.d(TAG, "id:$it") }
+                    Log.d(TAG, "next_cursor:${twitterUsersIds.next_cursor}")
+                    Log.d(TAG, "previous_cursor:${twitterUsersIds.previous_cursor}")
+                }
+
             }
         } )
     }
+
+    private fun getListFollowers(userRequest: UserRequest) {
+        userRequest.callListFollowers().enqueue(object : Callback<TwitterUsersIds> {
+            override fun onFailure(call: Call<TwitterUsersIds>, t: Throwable) {
+                Log.d(TAG, t?.message)
+            }
+
+            override fun onResponse(call: Call<TwitterUsersIds>, response: Response<TwitterUsersIds>) {
+                Log.d(TAG, "getListFollowers response.code:${response.code()}")
+                //Log.d(TAG, "response.headers:${response.headers()}")
+                val twitterUsersIds = response.body()
+                twitterUsersIds?.let {
+                    twitterUsersIds.ids?.forEach { Log.d(TAG, "id:$it") }
+                    Log.d(TAG, "next_cursor:${twitterUsersIds.next_cursor}")
+                    Log.d(TAG, "previous_cursor:${twitterUsersIds.previous_cursor}")
+                }
+
+            }
+        } )
+    }
+
 
     companion object {
         private const val TAG = "MainActivity"
     }
 }
 
-//data class Repo(val id: Long, val name: String)
+data class TwitterUsersIds(
+    val ids: List<Long>,
+    val next_cursor: Long,
+    val previous_cursor: Long
+)
 
 interface TwitterApi {
     @GET("1.1/friends/ids.json")
-    fun listFriends(@Query("cursor") cursor: Long): Call<List<Long>>
+    fun listFriends(@Query("cursor") cursor: Long): Call<TwitterUsersIds>
+    @GET("1.1/followers/ids.json")
+    fun listFollowers(@Query("cursor") cursor: Long): Call<TwitterUsersIds>
 }
 
 class UserRequest constructor(private val username: String,
@@ -117,9 +160,14 @@ class UserRequest constructor(private val username: String,
         .build()
     private val twitterApi = retrofit.create(TwitterApi::class.java)
 
-    fun callListFriends() : Call<List<Long>> {
+    fun callListFriends() : Call<TwitterUsersIds> {
         Log.d(TAG, "username=$username")
         return twitterApi.listFriends(-1)
+    }
+
+    fun callListFollowers() : Call<TwitterUsersIds> {
+        Log.d(TAG, "username=$username")
+        return twitterApi.listFollowers(-1)
     }
 
 companion object {
@@ -127,29 +175,19 @@ companion object {
     fun authorization(request: Request,
                       oauth_consumer_key: String, consumerSecret: String,
                       accessToken: String, secret: String): String {
-        fun oauth_nonce(): String {
-            return "${System.nanoTime()}${abs(SecureRandom().nextLong())}"
-        }
-        fun oauth_timestamp(): String {
-            return "${System.currentTimeMillis()/1000}"
-        }
+        val MAC_ALGORITHM = "HMAC-SHA1"
+        val oauth_nonce = "${System.nanoTime()}${Random.nextLong().absoluteValue}"
+        val oauth_timestamp = "${System.currentTimeMillis()/1000}"
         fun String.encode(): String {
             return URLEncoder.encode(this, "UTF-8")
-//
-//                .replace("*", "%2A")
-//                .replace("+", "%20")
-//                .replace("%7E", "~")
-        }
-        fun String.decode(): String {
-            return URLDecoder.decode(this, "UTF-8")
         }
         fun oauthParams(): MutableMap<String, String?> {
             val params = mutableMapOf<String, String?>()
             params["oauth_consumer_key"] = oauth_consumer_key
-            params["oauth_nonce"] = oauth_nonce()
+            params["oauth_nonce"] = oauth_nonce
             params["oauth_signature"] = null
             params["oauth_signature_method"] = "HMAC-SHA1"
-            params["oauth_timestamp"] = oauth_timestamp()
+            params["oauth_timestamp"] = oauth_timestamp
             params["oauth_token"] = accessToken
             params["oauth_version"] = "1.0"
             return params
@@ -169,7 +207,7 @@ companion object {
                 if (body !is FormBody)
                     return params
                 for (index in 0 until body.size())
-                    params[body.encodedName(index)] = body.encodedValue(index)
+                    params[body.name(index)] = body.value(index)
                 return params
             }
             val params = mutableMapOf<String, String>()
@@ -180,7 +218,7 @@ companion object {
             }
             val sortedParams = params.toSortedMap()
             val result = sortedParams
-                .map {(name, value) -> "$name=$value"}
+                .map {(name, value) -> "${name.encode()}=${value.encode()}"}
                 .joinToString(separator = "&")
             Log.d(TAG, "parameterString:$result")
             return result
@@ -204,8 +242,8 @@ companion object {
         fun oauth_signature(): String {
             val signatureBaseBytes = signatureBaseString().toByteArray()
             val signingKeyBytes = signingKey().toByteArray()
-            val mac = Mac.getInstance("HmacSHA1")
-            mac.init(SecretKeySpec(signingKeyBytes, "HmacSHA1"))
+            val mac = Mac.getInstance(MAC_ALGORITHM)
+            mac.init(SecretKeySpec(signingKeyBytes, MAC_ALGORITHM))
             val signatureBytes = mac.doFinal(signatureBaseBytes)
             val result = Base64.encodeToString(signatureBytes, Base64.NO_WRAP)
             Log.d(TAG, "oauth_signature:$result")
