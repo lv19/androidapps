@@ -5,9 +5,6 @@ import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.util.Base64
 import android.util.Log
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.auth.OAuthCredential
-import com.google.firebase.auth.OAuthProvider
 import okhttp3.FormBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -16,15 +13,10 @@ import retrofit2.Callback
 import retrofit2.Response
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
-import retrofit2.http.GET
-import retrofit2.http.Query
-import java.net.URLDecoder
+import retrofit2.http.*
 import java.net.URLEncoder
-import java.security.AlgorithmConstraints
-import java.security.SecureRandom
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
-import kotlin.math.abs
 import kotlin.math.absoluteValue
 import kotlin.random.Random
 
@@ -93,6 +85,9 @@ class MainActivity : AppCompatActivity() {
                     twitterUsersIds.ids?.forEach { Log.d(TAG, "id:$it") }
                     Log.d(TAG, "next_cursor:${twitterUsersIds.next_cursor}")
                     Log.d(TAG, "previous_cursor:${twitterUsersIds.previous_cursor}")
+                    twitterUsersIds.ids?.let {
+                        getListUsers(userRequest, it.map {"$it"}.joinToString(",") )
+                    }
                 }
 
             }
@@ -119,6 +114,24 @@ class MainActivity : AppCompatActivity() {
         } )
     }
 
+    private fun getListUsers(userRequest: UserRequest, user_id:String) {
+        userRequest.callListUsers(user_id).enqueue(object : Callback<ListUsers> {
+            override fun onFailure(call: Call<ListUsers>, t: Throwable) {
+                Log.d(TAG, t?.message)
+            }
+
+            override fun onResponse(call: Call<ListUsers>, response: Response<ListUsers>) {
+                Log.d(TAG, "getListUsers response.code:${response.code()}")
+                val listUsers = response.body()
+                listUsers?.let {
+                    listUsers.forEach {
+                        Log.d(TAG, "twitteUser:$it")
+                        //it.users?.forEach{Log.d(TAG, "user:$it")}
+                    }
+                }
+            }
+        })
+    }
 
     companion object {
         private const val TAG = "MainActivity"
@@ -130,12 +143,28 @@ data class TwitterUsersIds(
     val next_cursor: Long,
     val previous_cursor: Long
 )
+data class TwitterUser(
+    val id: Long,
+    val screen_name: String
+)
+
+typealias ListUsers = List<TwitterUser>
 
 interface TwitterApi {
     @GET("1.1/friends/ids.json")
     fun listFriends(@Query("cursor") cursor: Long): Call<TwitterUsersIds>
+
     @GET("1.1/followers/ids.json")
     fun listFollowers(@Query("cursor") cursor: Long): Call<TwitterUsersIds>
+
+    @GET("1.1/users/lookup.json")
+    //user_id: comma separated list of user IDs -use a POST for larger requests-
+    fun listUsers(@Query("user_id") user_id: String): Call<ListUsers>
+
+    @FormUrlEncoded
+    @POST("1.1/users/lookup.json")
+    //user_id: comma separated list of user IDs -up to 100-
+    fun getUsers(@Field("user_id") user_id: String): Call<ListUsers>
 }
 
 class UserRequest constructor(private val username: String,
@@ -160,14 +189,16 @@ class UserRequest constructor(private val username: String,
         .build()
     private val twitterApi = retrofit.create(TwitterApi::class.java)
 
-    fun callListFriends() : Call<TwitterUsersIds> {
-        Log.d(TAG, "username=$username")
+    fun callListFriends(): Call<TwitterUsersIds> {
         return twitterApi.listFriends(-1)
     }
 
-    fun callListFollowers() : Call<TwitterUsersIds> {
-        Log.d(TAG, "username=$username")
+    fun callListFollowers(): Call<TwitterUsersIds> {
         return twitterApi.listFollowers(-1)
+    }
+
+    fun callListUsers(user_id: String): Call<ListUsers> {
+        return  twitterApi.getUsers(user_id)
     }
 
 companion object {
