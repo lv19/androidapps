@@ -9,6 +9,7 @@ import android.view.ViewGroup
 import android.widget.Toast
 import androidx.activity.viewModels
 import androidx.lifecycle.*
+import androidx.recyclerview.widget.DividerItemDecoration
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
@@ -26,8 +27,9 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         val adapter = MainAdapter()
-        recyclerView.layoutManager = LinearLayoutManager(this)
+        //recyclerView.layoutManager = LinearLayoutManager(this)
         recyclerView.adapter = adapter
+        recyclerView.addItemDecoration(DividerItemDecoration(this, DividerItemDecoration.VERTICAL))
         val viewModel: MainViewModel by viewModels()
         viewModel.users.observe(this, Observer {
             it?.let { resource ->
@@ -58,7 +60,7 @@ class MainActivity : AppCompatActivity() {
 
 class MainAdapter() : RecyclerView.Adapter<MainAdapter.DataViewHolder>() {
 
-    private val users = arrayListOf<User>()
+    private val users = mutableListOf<User>()
 
     class DataViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
 
@@ -140,7 +142,7 @@ class MainViewModel() : ViewModel() {
 
     val users = liveData(Dispatchers.IO) {
         emit(Resource.loading(data = null))
-        delay(4000)
+        delay(2000)
         try {
             emit(Resource.success(data = mainRepository.getUsers()))
         } catch (exception: Exception) {
