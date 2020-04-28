@@ -31,7 +31,18 @@ class MainActivity : AppCompatActivity() {
         progressBar.visibility = View.GONE
 
         val accountViewModel: AccountViewModel by viewModels()
-        val accountFriends = accountViewModel.getAccountFriends(1)
+        val accounts = accountViewModel.accounts
+        accounts.observe(this, Observer {
+            it?.let {
+                Log.i("MainActivity", "accounts=$it")
+                if (it.isEmpty())
+                    accountViewModel.fillDatabase()
+                else
+                    accountViewModel.currentAccount.value = it.first()
+            }
+        })
+
+        val accountFriends = accountViewModel.accountFriends
         accountFriends.observe(this, Observer {
             it?.let {
                 Log.i("MainActivity", "account=${it.account} friends=${it.friends}")
@@ -39,20 +50,15 @@ class MainActivity : AppCompatActivity() {
             }
         })
 
-//        val friends1 = listOf(Friend(1, 1, "A1F1x"), Friend(3, 1, "A1F3x"))
-//        val accountFriends1 = AccountFriends(Account(1, "AccountUnoxx"), friends1)
-//        val friends2 = listOf(Friend(1, 2, "A2F1"), Friend(2, 2, "A2F2x"))
-//        val accountFriends2 = AccountFriends(Account(2, "AccountDos"), friends2)
-//        accountViewModel.insert(accountFriends1)
-//        accountViewModel.insert(accountFriends2)
-        //userViewModel.insert(User(1, "Uno"))
-        //userViewModel.insert(User(2, "Dos"))
-//        accountViewModel.users.observe(this, Observer {
-//            it.forEach{user ->Log.i("MainActivity", "user=$user")}
-//            recyclerView.visibility = View.VISIBLE
-//            progressBar.visibility = View.GONE
-//            accountAdapter.setFriends(it)
-//        })
+        floatingActionButton.setOnClickListener {
+            accountViewModel.currentAccount.value?.let {
+                val list = accounts.value!!
+                val index = list.indexOf(it)
+                val newIndex = (index + 1) % list.size
+                accountViewModel.currentAccount.value = list[newIndex]
+            }
+        }
+
     }
 }
 
@@ -76,7 +82,6 @@ class AccountAdapter(): RecyclerView.Adapter<AccountAdapter.ViewHolder>(){
     }
 }
 
-
 @Entity
 data class Account(@PrimaryKey val id: Long, val name: String)
 
@@ -94,7 +99,6 @@ data class AccountFriends(
     @Relation(parentColumn = "id", entityColumn = "accountId")
     var friends: List<Friend> = emptyList()
 )
-
 
 @Dao
 interface AccountDao {
@@ -150,10 +154,23 @@ class AccountViewModel(application: Application): AndroidViewModel(application) 
     private val accountRepository: AccountRepository = AccountRepository(application)
 
     val accounts = accountRepository.accounts
+    val currentAccount = MutableLiveData<Account>()
 
-    fun getAccountFriends(id: Long) = accountRepository.getAccountFriends(id)
+    val accountFriends: LiveData<AccountFriends> = Transformations.switchMap(currentAccount) {
+            account -> accountRepository.getAccountFriends(account.id)
+    }
 
     fun insert(accountFriends: AccountFriends) = viewModelScope.launch {
         accountRepository.insert(accountFriends)
+    }
+
+    fun fillDatabase() {
+        Log.i("AccountViewModel", "fillDatabase")
+        val friends1 = listOf(Friend(1, 1, "A1F1x"), Friend(3, 1, "A1F3x"))
+        val accountFriends1 = AccountFriends(Account(1, "AccountUnoxx"), friends1)
+        val friends2 = listOf(Friend(1, 2, "A2F1"), Friend(2, 2, "A2F2x"))
+        val accountFriends2 = AccountFriends(Account(2, "AccountDos"), friends2)
+        insert(accountFriends1)
+        insert(accountFriends2)
     }
 }
