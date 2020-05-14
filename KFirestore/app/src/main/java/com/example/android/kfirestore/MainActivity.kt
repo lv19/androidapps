@@ -8,6 +8,7 @@ import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.Observer
 import androidx.lifecycle.ViewModel
+import com.google.firebase.auth.ktx.auth
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 
@@ -17,6 +18,27 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        Firebase.auth.signOut()
+
+        Firebase.auth.currentUser?.let {
+            Log.i("MainActivity", "currentUser=$it")
+            init()
+        } ?: run {
+//            Log.i("MainActivity", "currentUser==null signInAnonymously")
+//            Firebase.auth.signInAnonymously().addOnSuccessListener {
+//                Log.i("MainActivity", "signInAnonymously success user=${it.user}")
+//                init()
+//            }
+            Log.i("MainActivity", "currentUser==null signInWithEmailAndPassword")
+            Firebase.auth.signInWithEmailAndPassword(FirebaseAuth.email, FirebaseAuth.password).addOnSuccessListener {
+                Log.i("MainActivity", "signInWithEmailAndPassword success user=${it.user}")
+                init()
+            }
+        }
+
+    }
+
+    fun init() {
         val viewModel: MainViewModel by viewModels()
         viewModel.getCs("1").observe(this, Observer {
             Log.i("MainActivity", "getCs=$it")
