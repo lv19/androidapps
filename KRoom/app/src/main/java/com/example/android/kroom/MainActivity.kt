@@ -156,7 +156,7 @@ class AccountViewModel(application: Application): AndroidViewModel(application) 
     val accounts = accountRepository.accounts
     val currentAccount = MutableLiveData<Account>()
 
-    val accountFriends: LiveData<AccountFriends> = Transformations.switchMap(currentAccount) {
+    val accountFriends: LiveData<AccountFriends> = currentAccount.switchMap {
             account -> accountRepository.getAccountFriends(account.id)
     }
 
